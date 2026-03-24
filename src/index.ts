@@ -18,6 +18,17 @@ import {
   executeBatch,
 } from "./meta-api.js";
 import { getInstagramPosts, getInstagramAccounts } from "./instagram-api.js";
+import {
+  getUserAccount as pinterestGetUserAccount,
+  listBoards as pinterestListBoards,
+  createBoard as pinterestCreateBoard,
+  createPin as pinterestCreatePin,
+  listPins as pinterestListPins,
+  getPin as pinterestGetPin,
+  updatePin as pinterestUpdatePin,
+  deletePin as pinterestDeletePin,
+  getPinAnalytics as pinterestGetPinAnalytics,
+} from "./pinterest-api.js";
 import { transcribeVideo, batchTranscribeVideos } from "./transcribe-api.js";
 import { generateImage } from "./image-api.js";
 import {
@@ -880,6 +891,235 @@ server.tool(
           },
         ],
       };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+// ==================== Pinterest Tools ====================
+
+server.tool(
+  "pinterest_get_account",
+  "Get Pinterest user account info (username, board count, follower count, monthly views, etc.)",
+  {},
+  async () => {
+    try {
+      const data = await pinterestGetUserAccount();
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "pinterest_list_boards",
+  "List all boards owned by the authenticated Pinterest user",
+  {
+    page_size: z.number().optional().describe("Number of boards per page (1-250, default: 25)"),
+    bookmark: z.string().optional().describe("Cursor for pagination from previous response"),
+  },
+  async ({ page_size, bookmark }) => {
+    try {
+      const data = await pinterestListBoards(page_size, bookmark);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "pinterest_create_board",
+  "Create a new Pinterest board with name, description, and privacy setting",
+  {
+    name: z.string().describe("Board name"),
+    description: z.string().optional().describe("Board description"),
+    privacy: z
+      .enum(["PUBLIC", "PROTECTED", "SECRET"])
+      .optional()
+      .describe("Privacy setting (default: PUBLIC)"),
+  },
+  async ({ name, description, privacy }) => {
+    try {
+      const data = await pinterestCreateBoard(name, description, privacy);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Board "${name}" created successfully.\n${JSON.stringify(data, null, 2)}`,
+          },
+        ],
+      };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "pinterest_create_pin",
+  "Create a pin (image or video) on a Pinterest board with title, description, link, and media",
+  {
+    board_id: z.string().describe("The board ID to pin to"),
+    title: z.string().optional().describe("Pin title (max 100 chars)"),
+    description: z.string().optional().describe("Pin description (max 800 chars)"),
+    link: z.string().optional().describe("Destination URL when pin is clicked"),
+    alt_text: z.string().optional().describe("Alt text for accessibility (max 500 chars)"),
+    media_type: z
+      .enum(["image_url", "image_base64", "video_url"])
+      .describe("Type of media source: image_url (public image URL), image_base64 (base64 data), video_url (public video URL or local path)"),
+    media_url: z.string().optional().describe("Public URL of the image or video (for image_url and video_url types)"),
+    media_base64: z.string().optional().describe("Base64-encoded image data (for image_base64 type)"),
+    media_content_type: z
+      .string()
+      .optional()
+      .describe("MIME type for base64 images (e.g. image/jpeg, image/png). Default: image/jpeg"),
+    board_section_id: z.string().optional().describe("Optional board section ID"),
+  },
+  async ({ board_id, title, description, link, alt_text, media_type, media_url, media_base64, media_content_type, board_section_id }) => {
+    try {
+      const data = await pinterestCreatePin({
+        board_id,
+        title,
+        description,
+        link,
+        alt_text,
+        media_type,
+        media_url,
+        media_base64,
+        media_content_type,
+        board_section_id,
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Pin created successfully.\n${JSON.stringify(data, null, 2)}`,
+          },
+        ],
+      };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "pinterest_list_pins",
+  "List pins owned by the authenticated Pinterest user with optional metrics",
+  {
+    page_size: z.number().optional().describe("Number of pins per page (1-250, default: 25)"),
+    bookmark: z.string().optional().describe("Cursor for pagination from previous response"),
+    pin_metrics: z
+      .boolean()
+      .optional()
+      .describe("Include 90-day and lifetime pin metrics (default: false)"),
+  },
+  async ({ page_size, bookmark, pin_metrics }) => {
+    try {
+      const data = await pinterestListPins(page_size, bookmark, pin_metrics);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "pinterest_get_pin",
+  "Get details of a specific Pinterest pin by ID",
+  {
+    pin_id: z.string().describe("The pin ID to retrieve"),
+  },
+  async ({ pin_id }) => {
+    try {
+      const data = await pinterestGetPin(pin_id);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "pinterest_update_pin",
+  "Update a Pinterest pin's title, description, link, board, or alt text",
+  {
+    pin_id: z.string().describe("The pin ID to update"),
+    title: z.string().optional().describe("New title (max 100 chars)"),
+    description: z.string().optional().describe("New description (max 800 chars)"),
+    link: z.string().optional().describe("New destination URL"),
+    board_id: z.string().optional().describe("Move pin to a different board"),
+    board_section_id: z.string().optional().describe("Move pin to a different board section"),
+    alt_text: z.string().optional().describe("New alt text (max 500 chars)"),
+  },
+  async ({ pin_id, title, description, link, board_id, board_section_id, alt_text }) => {
+    try {
+      const data = await pinterestUpdatePin(pin_id, {
+        title,
+        description,
+        link,
+        board_id,
+        board_section_id,
+        alt_text,
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Pin ${pin_id} updated successfully.\n${JSON.stringify(data, null, 2)}`,
+          },
+        ],
+      };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "pinterest_delete_pin",
+  "Delete a Pinterest pin by ID",
+  {
+    pin_id: z.string().describe("The pin ID to delete"),
+  },
+  async ({ pin_id }) => {
+    try {
+      const data = await pinterestDeletePin(pin_id);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Pin ${pin_id} deleted successfully.\n${JSON.stringify(data, null, 2)}`,
+          },
+        ],
+      };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "pinterest_get_pin_analytics",
+  "Get analytics (impressions, clicks, saves, video views, etc.) for a specific Pinterest pin",
+  {
+    pin_id: z.string().describe("The pin ID to get analytics for"),
+    start_date: z.string().describe("Start date (YYYY-MM-DD). Max 90 days back from today."),
+    end_date: z.string().describe("End date (YYYY-MM-DD). Max 90 days past start_date."),
+    metric_types: z
+      .string()
+      .describe(
+        'Comma-separated metric types: IMPRESSION, SAVE, PIN_CLICK, OUTBOUND_CLICK, VIDEO_MRC_VIEW, VIDEO_AVG_WATCH_TIME, VIDEO_V50_WATCH_TIME, QUARTILE_95_PERCENT_VIEW, VIDEO_10S_VIEW, VIDEO_START, TOTAL_COMMENTS, TOTAL_REACTIONS'
+      ),
+  },
+  async ({ pin_id, start_date, end_date, metric_types }) => {
+    try {
+      const types = metric_types.split(",").map((t) => t.trim());
+      const data = await pinterestGetPinAnalytics(pin_id, start_date, end_date, types);
+      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
     }
