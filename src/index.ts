@@ -31,6 +31,7 @@ import {
 } from "./pinterest-api.js";
 import { transcribeVideo, batchTranscribeVideos } from "./transcribe-api.js";
 import { generateImage } from "./image-api.js";
+import { describeVideo, describeImage } from "./gemini-api.js";
 import {
   getAdvertiserInfo as tiktokGetAdvertiserInfo,
   getCampaigns as tiktokGetCampaigns,
@@ -526,6 +527,69 @@ server.tool(
           },
         ],
       };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+// ==================== AI Video Understanding Tools ====================
+
+server.tool(
+  "describe_video",
+  "Analyze a video using Gemini AI vision to get a detailed description of its visual and audio content. Supports YouTube URLs, direct video URLs, and local file paths. Large videos are auto-compressed before analysis.",
+  {
+    video_url: z
+      .string()
+      .describe("Video source: a local file path (e.g. /path/to/video.mp4), a public URL (https://...), or a YouTube URL"),
+    prompt: z
+      .string()
+      .optional()
+      .describe(
+        "Custom prompt for the AI. Default: comprehensive video description including visual elements, on-screen text, mood, and audio"
+      ),
+    auto_optimize: z
+      .boolean()
+      .optional()
+      .describe(
+        "Auto-compress large videos (>20MB) before sending to Gemini for faster processing (default: true)"
+      ),
+  },
+  async ({ video_url, prompt, auto_optimize }) => {
+    try {
+      const result = await describeVideo({
+        videoUrl: video_url,
+        prompt,
+        autoOptimize: auto_optimize,
+      });
+      return { content: [{ type: "text", text: result.description }] };
+    } catch (e: any) {
+      return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
+    }
+  }
+);
+
+server.tool(
+  "describe_image",
+  "Analyze an image using Gemini AI vision to get a detailed description of its visual content. Supports local file paths and public image URLs.",
+  {
+    image_url: z
+      .string()
+      .describe("Image source: a local file path (e.g. /path/to/image.jpg) or a public URL (https://...)"),
+    prompt: z
+      .string()
+      .optional()
+      .describe(
+        "Custom prompt for the AI. Default: comprehensive image description including composition, colors, text, and mood"
+      ),
+  },
+  async ({ image_url, prompt }) => {
+    try {
+      const result = await describeImage({
+        imageUrl: image_url,
+        prompt,
+      });
+      return { content: [{ type: "text", text: result.description }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };
     }
