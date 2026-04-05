@@ -436,7 +436,7 @@ server.tool(
 
 server.tool(
   "get_instagram_posts",
-  "Get recent organic posts from a public Instagram profile with view counts (for videos/reels), video URLs, and post dates. No authentication required.",
+  "Get organic posts from an Instagram profile with flexible filtering, sorting, and pagination. Supports fetching all-time top posts by views, filtering by date range or media type, and more.",
   {
     username: z
       .string()
@@ -445,11 +445,35 @@ server.tool(
     limit: z
       .number()
       .optional()
-      .describe("Number of posts to fetch (default: 20, max depends on profile)"),
+      .describe("Number of posts to return in the final result after filtering/sorting (default: 20)"),
+    max_fetch: z
+      .number()
+      .optional()
+      .describe("Maximum posts to pull from the API via pagination (default: 50). Set higher (e.g. 500) to search deeper for top posts."),
+    sort_by: z
+      .enum(["date", "views"])
+      .optional()
+      .describe("Sort results by 'date' (default) or 'views'"),
+    sort_order: z
+      .enum(["desc", "asc"])
+      .optional()
+      .describe("Sort order: 'desc' (default) or 'asc'"),
+    since: z
+      .string()
+      .optional()
+      .describe("Only include posts after this date (YYYY-MM-DD)"),
+    until: z
+      .string()
+      .optional()
+      .describe("Only include posts before this date (YYYY-MM-DD)"),
+    media_type: z
+      .enum(["VIDEO", "IMAGE", "CAROUSEL_ALBUM", "all"])
+      .optional()
+      .describe("Filter by media type (default: 'all')"),
   },
-  async ({ username, limit }) => {
+  async ({ username, limit, max_fetch, sort_by, sort_order, since, until, media_type }) => {
     try {
-      const data = await getInstagramPosts(username, limit);
+      const data = await getInstagramPosts({ username, limit, max_fetch, sort_by, sort_order, since, until, media_type });
       return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
     } catch (e: any) {
       return { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true };

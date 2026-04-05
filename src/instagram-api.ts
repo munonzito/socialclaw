@@ -112,29 +112,79 @@ export async function getInstagramAccounts(): Promise<IGAccount[]> {
   return discoverIGAccounts();
 }
 
+export interface GetPostsOptions {
+  username?: string;
+  limit?: number;
+  max_fetch?: number;
+  sort_by?: "date" | "views";
+  sort_order?: "desc" | "asc";
+  since?: string;
+  until?: string;
+  media_type?: "VIDEO" | "IMAGE" | "CAROUSEL_ALBUM" | "all";
+}
+
 export async function getInstagramPosts(
-  username?: string,
-  limit: number = 20
-): Promise<{ ig_user_id: string; posts: OrganicPost[] }> {
+  options: GetPostsOptions = {}
+): Promise<{ ig_user_id: string; posts: OrganicPost[]; total_fetched: number }> {
+  const {
+    username,
+    limit = 20,
+    max_fetch = 50,
+    sort_by = "date",
+    sort_order = "desc",
+    since,
+    until,
+    media_type = "all",
+  } = options;
+
   const igUserId = await resolveIGUserId(username);
 
   const mediaFields =
     "id,media_type,media_url,thumbnail_url,timestamp,permalink,shortcode";
 
-  const data = await igGet(`${igUserId}/media`, {
+  const allMedia: any[] = [];
+  let nextUrl: string | null = null;
+  const pageSize = Math.min(max_fetch, 50);
+
+  const firstPage = await igGet(`${igUserId}/media`, {
     fields: mediaFields,
-    limit: String(limit),
+    limit: String(pageSize),
   });
 
-  if (!data?.data) {
+  if (!firstPage?.data) {
     throw new Error("No media data returned from Instagram API");
   }
 
+  allMedia.push(...firstPage.data);
+  nextUrl = firstPage.paging?.next ?? null;
+
+  while (nextUrl && allMedia.length < max_fetch) {
+    const res = await fetch(nextUrl);
+    if (!res.ok) break;
+    const page = await res.json();
+    if (!page?.data?.length) break;
+    allMedia.push(...page.data);
+    nextUrl = page.paging?.next ?? null;
+  }
+
+  const fetched = allMedia.slice(0, max_fetch);
+
+  const sinceDate = since ? new Date(since) : null;
+  const untilDate = until ? new Date(until) : null;
+
+  const filtered = fetched.filter((media: any) => {
+    if (media_type !== "all" && media.media_type !== media_type) return false;
+    if (sinceDate || untilDate) {
+      const postDate = new Date(media.timestamp);
+      if (sinceDate && postDate < sinceDate) return false;
+      if (untilDate && postDate > untilDate) return false;
+    }
+    return true;
+  });
+
   const posts: OrganicPost[] = [];
-
-  for (const media of data.data) {
+  for (const media of filtered) {
     const views = await getViewCount(media.id);
-
     posts.push({
       id: media.id,
       shortcode: media.shortcode,
@@ -148,5 +198,19 @@ export async function getInstagramPosts(
     });
   }
 
-  return { ig_user_id: igUserId, posts };
+  posts.sort((a, b) => {
+    let cmp: number;
+    if (sort_by === "views") {
+      cmp = (a.views ?? 0) - (b.views ?? 0);
+    } else {
+      cmp = new Date(a.date).getTime() - new Date(b.date).getTime();
+    }
+    return sort_order === "desc" ? -cmp : cmp;
+  });
+
+  return {
+    ig_user_id: igUserId,
+    posts: posts.slice(0, limit),
+    total_fetched: fetched.length,
+  };
 }
